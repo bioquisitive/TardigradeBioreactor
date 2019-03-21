@@ -1,0 +1,808 @@
+#include <config.h>
+#include <DS3232RTC.h>
+#include <Streaming.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C lcd(0x27, 2, 1,0,4,5,6,7,3, POSITIVE);
+
+//Vectors for arrow
+uint8_t arrow[8] = {0x0, 0x04 ,0x06, 0x1f, 0x06, 0x04, 0x00, 0x00};
+
+//Variables for the menu encoder
+int counter = 1; 
+int page=1;
+int Ready=1;
+int submenu=0;
+int last_counter = 0; 
+bool clk_State;
+bool Last_State; 
+bool dt_State;  
+int pushed = 0;
+
+//variables for Rotary Encoder
+volatile boolean TurnDetected;
+volatile boolean up;
+
+const int PinCLK=2;                   // Used for generating interrupts using CLK signal
+const int PinDT=3;                    // Used for reading DT signal
+const int PinSW=4;                    // Used for the push button switch
+
+void isr ()  {                    // Interrupt service routine is executed when a HIGH to LOW transition is detected on CLK
+ if (digitalRead(PinCLK))
+   up = digitalRead(PinDT);
+ else
+   up = !digitalRead(PinDT);
+ TurnDetected = true;
+}
+
+
+void setup () 
+ // put your setup code here, to run once:
+{
+ pinMode(PinCLK,INPUT);
+ pinMode(PinDT,INPUT);  
+ pinMode(PinSW,INPUT_PULLUP);
+ pinMode(6,OUTPUT);
+ 
+ attachInterrupt (0,isr,FALLING);   // interrupt 0 is always connected to pin 2 on Arduino UNO
+
+// Serial.println("Start");
+ Serial.begin (9600);
+
+//Create arrow character
+  lcd.createChar(0, arrow);   //Create the arrow symbol
+
+//Setup of RTC
+  setSyncProvider(RTC.get);
+  if(timeStatus() != timeSet)
+        Serial.println("Unable to sync with the RTC");
+    else
+        Serial.println("RTC has set the system time");
+  
+ //Initialize LCD screen
+  lcd.begin(20,4);
+  lcd.setCursor(3,0);
+  lcd.print("Welcome to");
+  lcd.setCursor(8,1);
+  lcd.print("BioGrad");
+  lcd.setCursor(0,2);
+  lcd.print ("Home of the mighty");
+  lcd.setCursor(8,3);
+  lcd.print("Tardigrades");
+  delay(4000);
+  lcd.clear();
+}
+
+void loop ()  {
+ static long virtualPosition=0;    // without STATIC it does not count correctly!!!
+ 
+ 
+ if (TurnDetected)  {        // do this only if rotation was detected
+   if ((up) && (virtualPosition<26))
+     virtualPosition++;
+   else if (!(up)&&(virtualPosition>0)) 
+     virtualPosition--;
+   TurnDetected = false;          // do NOT repeat IF loop until new rotation detected
+   Serial.print ("Count = ");  
+   Serial.println (virtualPosition);
+   counter = virtualPosition;
+   
+ }
+ // ------------------------------------------------------------------
+// MENU   MENU    MENU    MENU    MENU
+// ------------------------------------------------------------------
+   if((last_counter > counter) || (last_counter < counter)  || pushed) //Only print on the LCD when a step is detected or the button is pushed.
+  {
+    Ready=1;
+
+    //First page of the menu
+    if(submenu == 0)
+    {  
+      if(0 <= counter && counter < 5)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.write(1);  
+        lcd.print("On Demand Actions");
+        lcd.setCursor(0,1);  
+        lcd.print(" Current Settings");
+        lcd.setCursor(0,2);  
+        lcd.print(" Env Prefs");
+        lcd.setCursor(0,3);  
+        lcd.print(" Sample Time");
+        page=1;
+        if(pushed)
+        {
+          pushed=0;
+        }
+      }
+    
+      if(5 < counter && counter < 10)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);  
+        lcd.print(" On Demand Actions");
+        lcd.setCursor(0,1);
+        lcd.write(1);  
+        lcd.print("Current Settings");
+        lcd.setCursor(0,2);  
+        lcd.print(" Env Prefs");
+        lcd.setCursor(0,3);  
+        lcd.print(" Sample Time");
+        page=2;
+        if(pushed)
+        {  
+          pushed=0;
+        }     
+      }
+      
+      if(10 < counter && counter < 15)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);  
+        lcd.print(" On Demand Actions");
+        lcd.setCursor(0,1);
+        lcd.print(" Current Settings");
+        lcd.setCursor(0,2);
+        lcd.write(1);  
+        lcd.print("Env Prefs");
+        lcd.setCursor(0,3);  
+        lcd.print(" Sample Time");
+        page=3;
+        if(pushed)
+        {  
+          pushed=0;
+        }       
+      }
+    
+      if(15 < counter && counter < 26)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);  
+        lcd.print(" On Demand Actions");
+        lcd.setCursor(0,1);
+        lcd.print(" Current Settings");
+        lcd.setCursor(0,2); 
+        lcd.print(" Env Prefs");
+        lcd.setCursor(0,3);
+        lcd.write(1);   
+        lcd.print("Sample Time");
+        page=4;
+        if(pushed)
+        {  
+          pushed=0;
+        }  
+     }
+  }//submenu = 0;
+
+
+    //Second page of the menu
+    if(submenu == 1)
+      {  
+        if(0 <= counter && counter < 5)
+        {
+          lcd.clear();
+          lcd.setCursor(0,0);
+          lcd.write(1);  
+          lcd.print("Algae Feed Change");
+          lcd.setCursor(0,1);  
+          lcd.print(" top Algae Chamber");
+          lcd.setCursor(0,2); 
+          lcd.print(" Air Pumps");
+          lcd.setCursor(0,3);  
+          lcd.print(" Take Sample");
+          page=1;
+          pushed=0;    
+        }
+      
+        if(5 < counter && counter < 10)
+        {
+          lcd.clear();
+          lcd.setCursor(0,0);  
+          lcd.print(" Algae Feed Change");
+          lcd.setCursor(0,1);
+          lcd.write(1);  
+          lcd.print("top Algae Chamber");
+          lcd.setCursor(0,2); 
+          lcd.print(" Air Pumps");
+          lcd.setCursor(0,3);  
+          lcd.print(" Take Sample");
+          pushed=0;      
+        }
+      
+        if(10 < counter && counter < 15)
+        {
+          lcd.clear();
+          lcd.setCursor(0,0);  
+          lcd.print(" Algae Feed Change");
+          lcd.setCursor(0,1);
+          lcd.print(" top Algae Chamber");
+          lcd.setCursor(0,2);
+          lcd.write(1); 
+          lcd.print("Air Pumps");
+          lcd.setCursor(0,3);  
+          lcd.print(" Take Sample");
+          page=3;
+          if(pushed)
+        {  
+          pushed=0;
+        }       
+        }
+      
+        if(15 < counter && counter < 20)
+        {
+          lcd.clear();
+          lcd.setCursor(0,0);  
+          lcd.print(" Algae Feed Change");
+          lcd.setCursor(0,1);
+          lcd.print(" Top Algae Chamber");
+          lcd.setCursor(0,2);
+          lcd.print(" Air Pumps");
+          lcd.setCursor(0,3);
+          lcd.write(1);  
+          lcd.print("Take Sample");
+          page=4;
+          pushed=0;        
+        }
+
+        if(20< counter && counter < 26)
+        {
+          lcd.clear();
+          lcd.setCursor(0,0);
+          lcd.write(1);
+          lcd.print("Back");
+          page=5;
+          pushed=0;
+        }
+      }//submenu = 1;
+
+
+
+
+    //Third page of the menu
+    if(submenu == 2)
+    {  
+      if(0 <= counter && counter < 5)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.write(1);  
+        lcd.print("Light Cycle");
+        lcd.setCursor(0,1);  
+        lcd.print(" Change Feed Chamber");
+        lcd.setCursor(0,2);  
+        lcd.print(" Air Pumps ON/OFF");
+        lcd.setCursor(0,3);  
+        lcd.print(" Feed New Chamber");
+        page=1;
+        pushed=0;    
+      }
+    
+      if(5 < counter && counter < 10)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);  
+        lcd.print(" Light Cycle");
+        lcd.setCursor(0,1);
+        lcd.write(1);  
+        lcd.print("Change Feed Chamber");
+        lcd.setCursor(0,2);  
+        lcd.print(" Air Pumps ON/OFF");
+        lcd.setCursor(0,3);  
+        lcd.print(" Feed New Chamber");
+        page=2;
+        pushed=0;      
+      }
+    
+      if(10 < counter && counter < 15)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);  
+        lcd.print(" Light Cycle");
+        lcd.setCursor(0,1);  
+        lcd.print(" Change Feed Chamber");
+        lcd.setCursor(0,2);
+        lcd.write(1);  
+        lcd.print("Air Pumps ON/OFF");
+        lcd.setCursor(0,3);  
+        lcd.print(" Feed New Chamber");
+        page=3;
+        pushed=0;      
+      }
+    
+      if(15 < counter && counter < 20)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);  
+        lcd.print(" Light Cycle");
+        lcd.setCursor(0,1);  
+        lcd.print(" Change Feed Chamber");
+        lcd.setCursor(0,2);  
+        lcd.print(" Air Pumps ON/OFF");
+        lcd.setCursor(0,3);
+        lcd.write(1);  
+        lcd.print("Feed New Chamber");
+        page=4;
+        pushed=0;        
+      }
+      if(20< counter && counter < 26)
+        {
+          lcd.clear();
+          lcd.setCursor(0,0);
+          lcd.write(1);
+          lcd.print("Back");
+          page=5;
+          pushed=0;
+        }
+    }//submenu = 2;
+
+
+    //Forth page of the menu
+    if(submenu == 3)
+    {  
+      if(0 <= counter && counter < 5)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.write(1);  
+        lcd.print("ON");
+        lcd.setCursor(0,1);  
+        lcd.print(" OFF");
+        page=1;
+        pushed=0;    
+      }
+    
+      if(5 < counter && counter < 10)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print(" ON");
+        lcd.setCursor(0,1);
+        lcd.write(1);   
+        lcd.print("OFF");
+        page=2;
+        pushed=0;      
+      }    
+    }//submenu = 3;
+  
+  
+    if(submenu == 4)
+    {  
+      if(0 <= counter && counter < 5)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.write(1);  
+        lcd.print("25%");
+        lcd.setCursor(0,1);  
+        lcd.print(" 50%");
+        page=1;
+        pushed=0;    
+      }
+    
+      if(5 < counter && counter < 10)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print(" 25%");
+        lcd.setCursor(0,1);
+        lcd.write(1);   
+        lcd.print("50%");
+        page=2;
+        pushed=0;      
+      }
+    
+      if(10 < counter && counter < 15)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.write(1);  
+        lcd.print("75%");
+        lcd.setCursor(0,1);  
+        lcd.print(" 100%");
+        page=3;
+        pushed=0;      
+      }
+    
+      if(15 < counter && counter < 20)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print(" 75%");
+        lcd.setCursor(0,1);
+        lcd.write(1);   
+        lcd.print("100%");
+        page=4;
+        pushed=0;        
+      }
+    }//submenu = 4;
+
+    if (submenu == 5)
+    {
+      {  
+      if(0 <= counter && counter < 5)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.write(1);  
+        lcd.print("Pumps ON");
+        lcd.setCursor(0,1);  
+        lcd.print(" Pumps OFF");
+        page=1;
+        pushed=0;    
+      }
+    
+      if(5 < counter && counter < 10)
+      {
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print(" Pumps ON");
+        lcd.setCursor(0,1);
+        lcd.write(1);   
+        lcd.print("Pumps OFF");
+        page=2;
+        pushed=0;      
+      }    
+    }
+    }
+  }//end of the MENU prints on the LCD
+
+
+  last_counter = counter; //Save the value of the last state
+
+//Now we detect when we push the button
+//-----------------------------------------------
+// DETECT PUSH        DETECT PUSH       DETECT PUSH
+//-------------------------------------------------
+
+if(digitalRead(PinSW)==LOW)
+  {
+   virtualPosition=0;              // if YES, then reset counter to ZERO
+   Serial.print ("Reset = ");      // Using the word RESET instead of COUNT here to find out a buggy encoder
+   Serial.println (virtualPosition);
+   digitalClockDisplay();
+    if(submenu == 1)
+    {  
+      /*  
+       if(page==1)
+       {
+        submenu=0;
+        counter=1;
+        pushed=0;
+        Ready=0;
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("Making coffee...");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(4000);
+        digitalWrite (6, HIGH);
+       }
+    
+       if(page==2)
+       {
+        submenu=0;
+        counter=0;
+        pushed=0;
+        Ready=0; 
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("Making coffee...");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(4000);
+       }
+    
+       if(page==3)
+       {
+        counter=0;
+        pushed=0;
+        Ready=0; 
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("Making coffee...");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(4000);
+        submenu=3;
+        page=1;
+       }
+    */
+       if(page==5)
+       {
+        submenu=0;
+        counter=0;
+        pushed=0;
+        Ready=0;
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print(" Going back...  ");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(2000);
+       }
+    }//end of submenu 1
+/*
+
+    if(submenu == 2)
+    {    
+       if(page==1)
+       {
+        submenu=0;
+        counter=1;
+        pushed=0;
+        Ready=0; 
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("Sugar level 25%");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(4000);
+       }
+    
+       if(page==2)
+       {
+        submenu=0;
+        counter=0;
+        pushed=0;
+        Ready=0; 
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("Sugar level 50%");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(4000);
+       }
+    
+       if(page==3)
+       {
+        submenu=0;
+        counter=0;
+        pushed=0;
+        Ready=0; 
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("Sugar level 75%");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(4000);
+       }
+    
+       if(page==4)
+       {
+        submenu=0;
+        counter=0;
+        pushed=0;
+        Ready=0; 
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("Sugar level 100%");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(4000);
+       }
+       if(page==5)
+       {
+        submenu=0;
+        counter=0;
+        pushed=0;
+        Ready=0;
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print(" Going back...  ");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(2000);
+       }
+    }//end of submenu 1
+
+
+
+
+
+    if(submenu == 3)
+    {    
+       if(page==1)
+       {
+        submenu=0;
+        counter=1;
+        pushed=0;
+        Ready=0; 
+        lcd.backlight();
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("  pumps ON  ");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(4000);
+       }
+    
+       if(page==2)
+       {
+        submenu=0;
+        counter=0;
+        pushed=0;
+        Ready=0; 
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print(" Backlight  OFF");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(4000);
+       }    
+    }//end of submenu 3
+
+
+
+    if(submenu == 4)
+    {    
+       if(page==1)
+       {
+        submenu=0;
+        counter=0;
+        pushed=0;
+        Ready=0; 
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("   Volume 25%   ");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(4000);  
+       }
+    
+       if(page==2)
+       {
+        submenu=0;
+        counter=0;
+        pushed=0;
+        Ready=0;
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("   Volume 50%   ");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(4000);  
+       }
+    
+       if(page==3)
+       {
+        submenu=0;
+        counter=0;
+        pushed=0;
+        Ready=0; 
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("   Volume 75%   ");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(4000);  
+       }
+    
+       if(page==4)
+       {
+        submenu=0;
+        counter=0;
+        pushed=0;
+        Ready=0;
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("   Volume 100%  ");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(4000);  
+       }
+    }//end of submenu 4
+*/
+
+if(submenu == 5)
+    {    
+       if(page==1)
+       {
+        submenu=0;
+        counter=1;
+        pushed=0;
+        Ready=0; 
+        lcd.backlight();
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("  Pumps ON  ");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(4000);
+        digitalWrite(6,HIGH);
+       }
+    
+       if(page==2)
+       {
+        submenu=0;
+        counter=0;
+        pushed=0;
+        Ready=0; 
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print(" Pumps  OFF");
+        lcd.setCursor(0,1);  
+        lcd.print("      Wait      ");
+        delay(4000);
+        digitalWrite(6, LOW);
+       }    
+    }
+
+//----------------------------------------
+// PUSH NAVIGATION      PUSH NAVIGATION
+//----------------------------------------
+
+if(submenu == 0 && Ready==1)
+    {    
+       if(page==1)
+       {
+        submenu=1;
+        counter=0;
+        pushed=1; 
+        delay(500);
+        
+        
+       }
+    
+       if(page==2)
+       {
+        submenu=2;
+        counter=0;
+        pushed=1;delay(500);
+       }
+    
+       if(page==3)
+       {
+        submenu=3;
+        counter=0; 
+        pushed=1;delay(500);
+       }
+    
+       if(page==4)
+       {
+        submenu=4;
+        counter=0;
+        pushed=1;delay(500);
+       }
+    }//end of submenu 0
+    
+    if (submenu == 1 && Ready ==1)
+    {
+      if (page == 3)
+      {
+        submenu = 5;
+        counter = 1;
+        pushed = 1;
+        delay(500);
+      }
+    }
+
+   
+  }
+  
+}
+
+void digitalClockDisplay()
+{
+    // digital clock display of the time
+    Serial.print(hour());
+    printDigits(minute());
+    printDigits(second());
+    Serial.print(' ');
+    Serial.print(day());
+    Serial.print(' ');
+    Serial.print(month());
+    Serial.print(' ');
+    Serial.print(year());
+    Serial.println();
+}
+
+void printDigits(int digits)
+{
+    // utility function for digital clock display: prints preceding colon and leading 0
+    Serial.print(':');
+    if(digits < 10)
+        Serial.print('0');
+    Serial.print(digits);
+}
